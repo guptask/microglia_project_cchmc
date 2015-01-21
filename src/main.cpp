@@ -46,7 +46,7 @@ bool enhanceImage(cv::Mat src, ChannelType channel_type, cv::Mat *dst) {
             cv::threshold(src_gray, src_gray, 50, 255, cv::THRESH_TOZERO);
             bitwise_not(src_gray, src_gray);
             cv::GaussianBlur(src_gray, enhanced, cv::Size(3,3), 0, 0);
-            cv::threshold(enhanced, enhanced, 220, 255, cv::THRESH_BINARY);
+            cv::threshold(enhanced, enhanced, 240, 255, cv::THRESH_BINARY);
 
             // Invert the mask
             bitwise_not(enhanced, enhanced);
@@ -243,7 +243,7 @@ bool processDir(std::string dir_name, std::string out_file) {
             }
             out_blue.insert(out_blue.find_last_of("."), "_enhanced", 9);
             if (DEBUG_FLAG) cv::imwrite(out_blue.c_str(), blue_enhanced);
-            contourCalc(blue_enhanced, ChannelType::BLUE, 100.0, &blue_segmented, 
+            contourCalc(blue_enhanced, ChannelType::BLUE, 1.0, &blue_segmented, 
                             &contours_blue, &hierarchy_blue, &blue_contour_mask, 
                             &blue_contour_area);
             out_blue.insert(out_blue.find_last_of("."), "_segmented", 10);
