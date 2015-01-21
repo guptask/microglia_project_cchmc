@@ -53,6 +53,16 @@ bool enhanceImage(cv::Mat src, ChannelType channel_type, cv::Mat *dst) {
         } break;
 
         case ChannelType::GREEN: {
+            // Enhance the green channel
+
+            // Create the mask
+            cv::threshold(src_gray, src_gray, 50, 255, cv::THRESH_TOZERO);
+            bitwise_not(src_gray, src_gray);
+            cv::GaussianBlur(src_gray, enhanced, cv::Size(3,3), 0, 0);
+            cv::threshold(enhanced, enhanced, 240, 255, cv::THRESH_BINARY);
+
+            // Invert the mask
+            bitwise_not(enhanced, enhanced);
         } break;
 
         case ChannelType::RED: {
@@ -225,7 +235,7 @@ bool processDir(std::string dir_name, std::string out_file) {
         // Manipulate RGB channels and extract features for a certain number of Z layers
         if (z_index >= NUM_Z_LAYERS) {
 
-            /* Gather RGB channel information needed for feature extraction */
+            /* Gather BGR channel information needed for feature extraction */
 
             // Blue channel
             cv::Mat blue_merge, blue_enhanced, blue_segmented;
@@ -248,6 +258,28 @@ bool processDir(std::string dir_name, std::string out_file) {
                             &blue_contour_area);
             out_blue.insert(out_blue.find_last_of("."), "_segmented", 10);
             if (DEBUG_FLAG) cv::imwrite(out_blue.c_str(), blue_segmented);
+
+            // Green channel
+            cv::Mat green_merge, green_enhanced, green_segmented;
+            std::vector<std::vector<cv::Point>> contours_green;
+            std::vector<cv::Vec4i> hierarchy_green;
+            std::vector<HierarchyType> green_contour_mask;
+            std::vector<double> green_contour_area;
+
+            cv::merge(green, green_merge);
+            std::string out_green = out_directory + "trilayer_green_layer_" + 
+                            std::to_string(z_index-NUM_Z_LAYERS+1) + ".tif";
+            if (DEBUG_FLAG) cv::imwrite(out_green.c_str(), green_merge);
+            if(!enhanceImage(green_merge, ChannelType::GREEN, &green_enhanced)) {
+                return false;
+            }
+            out_green.insert(out_green.find_last_of("."), "_enhanced", 9);
+            if (DEBUG_FLAG) cv::imwrite(out_green.c_str(), green_enhanced);
+            contourCalc(green_enhanced, ChannelType::GREEN, 1.0, &green_segmented, 
+                            &contours_green, &hierarchy_green, &green_contour_mask, 
+                            &green_contour_area);
+            out_green.insert(out_green.find_last_of("."), "_segmented", 10);
+            if (DEBUG_FLAG) cv::imwrite(out_green.c_str(), green_segmented);
 
         }
     }
