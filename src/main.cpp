@@ -313,6 +313,10 @@ bool processDir(std::string dir_name, std::string out_file) {
             out_red.insert(out_red.find_last_of("."), "_segmented", 10);
             if (DEBUG_FLAG) cv::imwrite(out_red.c_str(), red_segmented);
 
+
+            /** Extract multi-dimensional features for analysis **/
+            //TODO
+
         }
     }
     data_stream.close();
