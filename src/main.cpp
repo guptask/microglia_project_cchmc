@@ -10,10 +10,10 @@
 #include "opencv2/photo/photo.hpp"
 #include "opencv2/imgcodecs.hpp"
 
-#define NUM_Z_LAYERS            1   // Merge a certain number of z layers
+#define NUM_Z_LAYERS            3   // Merge a certain number of z layers
 #define NUM_SYNAPSE_AREA_BINS   21  // Number of bins
 #define SYNAPSE_BIN_AREA        25  // Bin area
-#define DEBUG_FLAG              0   // Debug flag for image channels
+#define DEBUG_FLAG              1   // Debug flag for image channels
 
 /* Channel type */
 enum class ChannelType : unsigned char {
@@ -40,6 +40,16 @@ bool enhanceImage(cv::Mat src, ChannelType channel_type, cv::Mat *dst) {
     cv::Mat enhanced;
     switch(channel_type) {
         case ChannelType::BLUE: {
+            // Enhance the blue channel
+
+            // Create the mask
+            cv::threshold(src_gray, src_gray, 50, 255, cv::THRESH_TOZERO);
+            bitwise_not(src_gray, src_gray);
+            cv::GaussianBlur(src_gray, enhanced, cv::Size(3,3), 0, 0);
+            cv::threshold(enhanced, enhanced, 220, 255, cv::THRESH_BINARY);
+
+            // Invert the mask
+            bitwise_not(enhanced, enhanced);
         } break;
 
         case ChannelType::GREEN: {
@@ -68,13 +78,13 @@ void contourCalc(cv::Mat src, ChannelType channel_type,
     cv::Mat temp_src;
     src.copyTo(temp_src);
     switch(channel_type) {
-        case ChannelType::BLUE: {
+        case ChannelType::BLUE:
+        case ChannelType::GREEN: {
             findContours(temp_src, *contours, *hierarchy, cv::RETR_EXTERNAL, 
                                                         cv::CHAIN_APPROX_SIMPLE);
         } break;
 
-        case ChannelType::RED : 
-        case ChannelType::GREEN : {
+        case ChannelType::RED : {
             findContours(temp_src, *contours, *hierarchy, cv::RETR_CCOMP, 
                                                         cv::CHAIN_APPROX_SIMPLE);
         } break;
@@ -160,7 +170,7 @@ bool processDir(std::string dir_name, std::string out_file) {
     }
     closedir(read_dir);
 
-    if (z_count < NUM_Z_LAYERS) {
+    if ((z_count < NUM_Z_LAYERS) || (NUM_Z_LAYERS > 3)) {
         std::cerr << "Not enough z layers in the image." << std::endl;
         return false;
     }
@@ -214,9 +224,35 @@ bool processDir(std::string dir_name, std::string out_file) {
 
         // Manipulate RGB channels and extract features for a certain number of Z layers
         if (z_index >= NUM_Z_LAYERS) {
+
+            /* Gather RGB channel information needed for feature extraction */
+
+            // Blue channel
+            cv::Mat blue_merge, blue_enhanced, blue_segmented;
+            std::vector<std::vector<cv::Point>> contours_blue;
+            std::vector<cv::Vec4i> hierarchy_blue;
+            std::vector<HierarchyType> blue_contour_mask;
+            std::vector<double> blue_contour_area;
+
+            cv::merge(blue, blue_merge);
+            std::string out_blue = out_directory + "trilayer_blue_layer_" + 
+                            std::to_string(z_index-NUM_Z_LAYERS+1) + ".tif";
+            if (DEBUG_FLAG) cv::imwrite(out_blue.c_str(), blue_merge);
+            if(!enhanceImage(blue_merge, ChannelType::BLUE, &blue_enhanced)) {
+                return false;
+            }
+            out_blue.insert(out_blue.find_last_of("."), "_enhanced", 9);
+            if (DEBUG_FLAG) cv::imwrite(out_blue.c_str(), blue_enhanced);
+            contourCalc(blue_enhanced, ChannelType::BLUE, 100.0, &blue_segmented, 
+                            &contours_blue, &hierarchy_blue, &blue_contour_mask, 
+                            &blue_contour_area);
+            out_blue.insert(out_blue.find_last_of("."), "_segmented", 10);
+            if (DEBUG_FLAG) cv::imwrite(out_blue.c_str(), blue_segmented);
+
         }
     }
     data_stream.close();
+
     return true;
 }
 
