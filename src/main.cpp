@@ -66,6 +66,16 @@ bool enhanceImage(cv::Mat src, ChannelType channel_type, cv::Mat *dst) {
         } break;
 
         case ChannelType::RED: {
+            // Enhance the red channel
+
+            // Create the mask
+            cv::threshold(src_gray, src_gray, 5, 255, cv::THRESH_TOZERO);
+            bitwise_not(src_gray, src_gray);
+            cv::GaussianBlur(src_gray, enhanced, cv::Size(3,3), 0, 0);
+            cv::threshold(enhanced, enhanced, 240, 255, cv::THRESH_BINARY);
+
+            // Invert the mask
+            bitwise_not(enhanced, enhanced);
         } break;
 
         default: {
@@ -280,6 +290,28 @@ bool processDir(std::string dir_name, std::string out_file) {
                             &green_contour_area);
             out_green.insert(out_green.find_last_of("."), "_segmented", 10);
             if (DEBUG_FLAG) cv::imwrite(out_green.c_str(), green_segmented);
+
+            // Red channel
+            cv::Mat red_merge, red_enhanced, red_segmented;
+            std::vector<std::vector<cv::Point>> contours_red;
+            std::vector<cv::Vec4i> hierarchy_red;
+            std::vector<HierarchyType> red_contour_mask;
+            std::vector<double> red_contour_area;
+
+            cv::merge(red, red_merge);
+            std::string out_red = out_directory + "trilayer_red_layer_" + 
+                            std::to_string(z_index-NUM_Z_LAYERS+1) + ".tif";
+            if (DEBUG_FLAG) cv::imwrite(out_red.c_str(), red_merge);
+            if(!enhanceImage(red_merge, ChannelType::RED, &red_enhanced)) {
+                return false;
+            }
+            out_red.insert(out_red.find_last_of("."), "_enhanced", 9);
+            if (DEBUG_FLAG) cv::imwrite(out_red.c_str(), red_enhanced);
+            contourCalc(red_enhanced, ChannelType::RED, 1.0, &red_segmented, 
+                            &contours_red, &hierarchy_red, &red_contour_mask, 
+                            &red_contour_area);
+            out_red.insert(out_red.find_last_of("."), "_segmented", 10);
+            if (DEBUG_FLAG) cv::imwrite(out_red.c_str(), red_segmented);
 
         }
     }
