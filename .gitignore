@@ -1,0 +1,5 @@
+# Project specific
+segment
+tags
+*.o
+opencv
