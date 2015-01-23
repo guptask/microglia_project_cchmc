@@ -10,7 +10,6 @@
 #include "opencv2/photo/photo.hpp"
 #include "opencv2/imgcodecs.hpp"
 
-#define NUM_Z_LAYERS            3   // Merge a certain number of z layers
 #define DEBUG_FLAG              1   // Debug flag for image channels
 
 /* Channel type */
@@ -30,10 +29,6 @@ enum class HierarchyType : unsigned char {
 /* Enhance the image */
 bool enhanceImage(cv::Mat src, ChannelType channel_type, cv::Mat *dst) {
 
-    // Convert to grayscale
-    cv::Mat src_gray;
-    cvtColor (src, src_gray, cv::COLOR_BGR2GRAY);
-
     // Enhance the image using Gaussian blur and thresholding
     cv::Mat enhanced;
     switch(channel_type) {
@@ -41,7 +36,8 @@ bool enhanceImage(cv::Mat src, ChannelType channel_type, cv::Mat *dst) {
             // Enhance the blue channel
 
             // Create the mask
-            cv::threshold(src_gray, src_gray, 50, 255, cv::THRESH_TOZERO);
+            cv::Mat src_gray;
+            cv::threshold(src, src_gray, 50, 255, cv::THRESH_TOZERO);
             bitwise_not(src_gray, src_gray);
             cv::GaussianBlur(src_gray, enhanced, cv::Size(3,3), 0, 0);
             cv::threshold(enhanced, enhanced, 240, 255, cv::THRESH_BINARY);
@@ -54,7 +50,8 @@ bool enhanceImage(cv::Mat src, ChannelType channel_type, cv::Mat *dst) {
             // Enhance the green channel
 
             // Create the mask
-            cv::threshold(src_gray, src_gray, 50, 255, cv::THRESH_TOZERO);
+            cv::Mat src_gray;
+            cv::threshold(src, src_gray, 50, 255, cv::THRESH_TOZERO);
             bitwise_not(src_gray, src_gray);
             cv::GaussianBlur(src_gray, enhanced, cv::Size(3,3), 0, 0);
             cv::threshold(enhanced, enhanced, 240, 255, cv::THRESH_BINARY);
@@ -67,7 +64,8 @@ bool enhanceImage(cv::Mat src, ChannelType channel_type, cv::Mat *dst) {
             // Enhance the red channel
 
             // Create the mask
-            cv::threshold(src_gray, src_gray, 5, 255, cv::THRESH_TOZERO);
+            cv::Mat src_gray;
+            cv::threshold(src, src_gray, 5, 255, cv::THRESH_TOZERO);
             bitwise_not(src_gray, src_gray);
             cv::GaussianBlur(src_gray, enhanced, cv::Size(3,3), 0, 0);
             cv::threshold(enhanced, enhanced, 240, 255, cv::THRESH_BINARY);
@@ -151,6 +149,64 @@ void contourCalc(cv::Mat src, ChannelType channel_type,
     }
 }
 
+/* Classify Microglial cells */
+void classifyMicroglialCells(std::vector<std::vector<cv::Point>> blue_contours, 
+                                cv::Mat blue_red_intersection,
+                                std::vector<std::vector<cv::Point>> *microglial_contours,
+                                std::vector<std::vector<cv::Point>> *other_contours) {
+
+    for (size_t i = 0; i < blue_contours.size(); i++) {
+
+        // Eliminate small contours via contour arc calculation
+        if ((arcLength(blue_contours[i], true) < 10) || (blue_contours[i].size() < 5)) continue;
+
+        // Determine whether microglial cell by calculating blue-red coverage area
+        std::vector<std::vector<cv::Point>> specific_contour (1, blue_contours[i]);
+        cv::Mat drawing = cv::Mat::zeros(blue_red_intersection.size(), CV_8UC1);
+        drawContours(drawing, specific_contour, -1, cv::Scalar::all(255), cv::FILLED, 
+                                    cv::LINE_8, std::vector<cv::Vec4i>(), 0, cv::Point());
+        int contour_count_before = countNonZero(drawing);
+        cv::Mat contour_intersection;
+        bitwise_and(drawing, blue_red_intersection, contour_intersection);
+        int contour_count_after = countNonZero(contour_intersection);
+        float coverage_ratio = ((float)contour_count_after)/contour_count_before;
+        if (coverage_ratio < 0.75) {
+            other_contours->push_back(blue_contours[i]);
+        } else {
+            microglial_contours->push_back(blue_contours[i]);
+        }
+    }
+}
+
+/* Classify Neural cells */
+void classifyNeuralCells(std::vector<std::vector<cv::Point>> blue_contours, 
+                            cv::Mat blue_green_intersection,
+                            std::vector<std::vector<cv::Point>> *neural_contours,
+                            std::vector<std::vector<cv::Point>> *other_contours) {
+
+    for (size_t i = 0; i < blue_contours.size(); i++) {
+
+        // Eliminate small contours via contour arc calculation
+        if ((arcLength(blue_contours[i], true) < 10) || (blue_contours[i].size() < 5)) continue;
+
+        // Determine whether neural cell by calculating blue-green coverage area
+        std::vector<std::vector<cv::Point>> specific_contour (1, blue_contours[i]);
+        cv::Mat drawing = cv::Mat::zeros(blue_green_intersection.size(), CV_8UC1);
+        drawContours(drawing, specific_contour, -1, cv::Scalar::all(255), cv::FILLED, 
+                                    cv::LINE_8, std::vector<cv::Vec4i>(), 0, cv::Point());
+        int contour_count_before = countNonZero(drawing);
+        cv::Mat contour_intersection;
+        bitwise_and(drawing, blue_green_intersection, contour_intersection);
+        int contour_count_after = countNonZero(contour_intersection);
+        float coverage_ratio = ((float)contour_count_after)/contour_count_before;
+        if (coverage_ratio < 0.75) {
+            other_contours->push_back(blue_contours[i]);
+        } else {
+            neural_contours->push_back(blue_contours[i]);
+        }
+    }
+}
+
 /* Process the images inside each directory */
 bool processDir(std::string dir_name, std::string out_file) {
 
@@ -188,11 +244,6 @@ bool processDir(std::string dir_name, std::string out_file) {
     }
     closedir(read_dir);
 
-    if ((z_count < NUM_Z_LAYERS) || (NUM_Z_LAYERS > 3)) {
-        std::cerr << "Not enough z layers in the image." << std::endl;
-        return false;
-    }
-
     // Extract the input directory name
     std::istringstream iss(dir_name);
     std::string token;
@@ -206,8 +257,7 @@ bool processDir(std::string dir_name, std::string out_file) {
         mkdir(out_directory.c_str(), 0700);
     }
 
-    std::vector<cv::Mat> blue(NUM_Z_LAYERS), green(NUM_Z_LAYERS), 
-                                red(NUM_Z_LAYERS), original(NUM_Z_LAYERS);
+    std::vector<cv::Mat> blue(z_count), green(z_count), red(z_count), original(z_count);
     for (uint8_t z_index = 1; z_index <= z_count; z_index++) {
 
         // Create the input filename and rgb stream output filenames
@@ -231,92 +281,129 @@ bool processDir(std::string dir_name, std::string out_file) {
             std::cerr << "Invalid input filename" << std::endl;
             return false;
         }
-        original[(z_index-1)%NUM_Z_LAYERS] = img;
+        original[z_index-1] = img;
 
         std::vector<cv::Mat> channel(3);
         cv::split(img, channel);
 
-        blue[(z_index-1)%NUM_Z_LAYERS] = channel[0];
-        green[(z_index-1)%NUM_Z_LAYERS] = channel[1];
-        red[(z_index-1)%NUM_Z_LAYERS] = channel[2];
+        blue[z_index-1]  = channel[0];
+        green[z_index-1] = channel[1];
+        red[z_index-1]   = channel[2];
+    }
 
-        // Manipulate RGB channels and extract features for a certain number of Z layers
-        if (z_index >= NUM_Z_LAYERS) {
+    /* Gather BGR channel information needed for feature extraction */
 
-            /* Gather BGR channel information needed for feature extraction */
-
-            // Blue channel
-            cv::Mat blue_merge, blue_enhanced, blue_segmented;
-            std::vector<std::vector<cv::Point>> contours_blue;
-            std::vector<cv::Vec4i> hierarchy_blue;
-            std::vector<HierarchyType> blue_contour_mask;
-            std::vector<double> blue_contour_area;
-
-            cv::merge(blue, blue_merge);
-            std::string out_blue = out_directory + "trilayer_blue_layer_" + 
-                            std::to_string(z_index-NUM_Z_LAYERS+1) + ".tif";
-            if (DEBUG_FLAG) cv::imwrite(out_blue.c_str(), blue_merge);
-            if(!enhanceImage(blue_merge, ChannelType::BLUE, &blue_enhanced)) {
-                return false;
-            }
-            out_blue.insert(out_blue.find_last_of("."), "_enhanced", 9);
-            if (DEBUG_FLAG) cv::imwrite(out_blue.c_str(), blue_enhanced);
-            contourCalc(blue_enhanced, ChannelType::BLUE, 1.0, &blue_segmented, 
-                            &contours_blue, &hierarchy_blue, &blue_contour_mask, 
-                            &blue_contour_area);
-            out_blue.insert(out_blue.find_last_of("."), "_segmented", 10);
-            if (DEBUG_FLAG) cv::imwrite(out_blue.c_str(), blue_segmented);
-
-            // Green channel
-            cv::Mat green_merge, green_enhanced, green_segmented;
-            std::vector<std::vector<cv::Point>> contours_green;
-            std::vector<cv::Vec4i> hierarchy_green;
-            std::vector<HierarchyType> green_contour_mask;
-            std::vector<double> green_contour_area;
-
-            cv::merge(green, green_merge);
-            std::string out_green = out_directory + "trilayer_green_layer_" + 
-                            std::to_string(z_index-NUM_Z_LAYERS+1) + ".tif";
-            if (DEBUG_FLAG) cv::imwrite(out_green.c_str(), green_merge);
-            if(!enhanceImage(green_merge, ChannelType::GREEN, &green_enhanced)) {
-                return false;
-            }
-            out_green.insert(out_green.find_last_of("."), "_enhanced", 9);
-            if (DEBUG_FLAG) cv::imwrite(out_green.c_str(), green_enhanced);
-            contourCalc(green_enhanced, ChannelType::GREEN, 1.0, &green_segmented, 
-                            &contours_green, &hierarchy_green, &green_contour_mask, 
-                            &green_contour_area);
-            out_green.insert(out_green.find_last_of("."), "_segmented", 10);
-            if (DEBUG_FLAG) cv::imwrite(out_green.c_str(), green_segmented);
-
-            // Red channel
-            cv::Mat red_merge, red_enhanced, red_segmented;
-            std::vector<std::vector<cv::Point>> contours_red;
-            std::vector<cv::Vec4i> hierarchy_red;
-            std::vector<HierarchyType> red_contour_mask;
-            std::vector<double> red_contour_area;
-
-            cv::merge(red, red_merge);
-            std::string out_red = out_directory + "trilayer_red_layer_" + 
-                            std::to_string(z_index-NUM_Z_LAYERS+1) + ".tif";
-            if (DEBUG_FLAG) cv::imwrite(out_red.c_str(), red_merge);
-            if(!enhanceImage(red_merge, ChannelType::RED, &red_enhanced)) {
-                return false;
-            }
-            out_red.insert(out_red.find_last_of("."), "_enhanced", 9);
-            if (DEBUG_FLAG) cv::imwrite(out_red.c_str(), red_enhanced);
-            contourCalc(red_enhanced, ChannelType::RED, 1.0, &red_segmented, 
-                            &contours_red, &hierarchy_red, &red_contour_mask, 
-                            &red_contour_area);
-            out_red.insert(out_red.find_last_of("."), "_segmented", 10);
-            if (DEBUG_FLAG) cv::imwrite(out_red.c_str(), red_segmented);
-
-
-            /** Extract multi-dimensional features for analysis **/
-            //TODO
-
+    // Blue channel
+    cv::Mat blue_merge;
+    for (uint8_t z_index = 0; z_index < z_count; z_index++) {
+        cv::Mat blue_enhanced;
+        if(!enhanceImage(blue[z_index], ChannelType::BLUE, &blue_enhanced)) {
+            return false;
+        }
+        if (z_index) {
+            bitwise_or(blue_enhanced, blue_merge, blue_merge);
+        } else {
+            blue_merge = blue_enhanced;
         }
     }
+    std::string out_blue = out_directory + "blue_layer_merged_enhanced.tif";
+    if (DEBUG_FLAG) cv::imwrite(out_blue.c_str(), blue_merge);
+
+    cv::Mat blue_segmented;
+    std::vector<std::vector<cv::Point>> contours_blue;
+    std::vector<cv::Vec4i> hierarchy_blue;
+    std::vector<HierarchyType> blue_contour_mask;
+    std::vector<double> blue_contour_area;
+    contourCalc(blue_merge, ChannelType::BLUE, 1.0, &blue_segmented, 
+            &contours_blue, &hierarchy_blue, &blue_contour_mask, &blue_contour_area);
+    out_blue.insert(out_blue.find_last_of("."), "_segmented", 10);
+    if (DEBUG_FLAG) cv::imwrite(out_blue.c_str(), blue_segmented);
+
+    // Green channel
+    cv::Mat green_merge;
+    for (uint8_t z_index = 0; z_index < z_count; z_index++) {
+        cv::Mat green_enhanced;
+        if(!enhanceImage(green[z_index], ChannelType::GREEN, &green_enhanced)) {
+            return false;
+        }
+        if (z_index) {
+            bitwise_or(green_enhanced, green_merge, green_merge);
+        } else {
+            green_merge = green_enhanced;
+        }
+    }
+    std::string out_green = out_directory + "green_layer_merged_enhanced.tif";
+    if (DEBUG_FLAG) cv::imwrite(out_green.c_str(), green_merge);
+
+    cv::Mat green_segmented;
+    std::vector<std::vector<cv::Point>> contours_green;
+    std::vector<cv::Vec4i> hierarchy_green;
+    std::vector<HierarchyType> green_contour_mask;
+    std::vector<double> green_contour_area;
+    contourCalc(green_merge, ChannelType::GREEN, 1.0, &green_segmented, 
+            &contours_green, &hierarchy_green, &green_contour_mask, &green_contour_area);
+    out_green.insert(out_green.find_last_of("."), "_segmented", 10);
+    if (DEBUG_FLAG) cv::imwrite(out_green.c_str(), green_segmented);
+
+    // Red channel
+    cv::Mat red_merge;
+    for (uint8_t z_index = 0; z_index < z_count; z_index++) {
+        cv::Mat red_enhanced;
+        if(!enhanceImage(red[z_index], ChannelType::RED, &red_enhanced)) {
+            return false;
+        }
+        if (z_index) {
+            bitwise_or(red_enhanced, red_merge, red_merge);
+        } else {
+            red_merge = red_enhanced;
+        }
+    }
+    std::string out_red = out_directory + "red_layer_merged_enhanced.tif";
+    if (DEBUG_FLAG) cv::imwrite(out_red.c_str(), red_merge);
+
+    cv::Mat red_segmented;
+    std::vector<std::vector<cv::Point>> contours_red;
+    std::vector<cv::Vec4i> hierarchy_red;
+    std::vector<HierarchyType> red_contour_mask;
+    std::vector<double> red_contour_area;
+    contourCalc(red_merge, ChannelType::RED, 1.0, &red_segmented, 
+            &contours_red, &hierarchy_red, &red_contour_mask, &red_contour_area);
+    out_red.insert(out_red.find_last_of("."), "_segmented", 10);
+    if (DEBUG_FLAG) cv::imwrite(out_red.c_str(), red_segmented);
+
+
+    /** Extract multi-dimensional features for analysis **/
+
+    // Blue-red channel intersection
+    cv::Mat blue_red_intersection;
+    bitwise_and(blue_merge, red_merge, blue_red_intersection);
+    std::string out_blue_red_intersection = out_directory + 
+                        "blue_red_layers_merged_enhanced.tif";
+    if (DEBUG_FLAG) cv::imwrite(out_blue_red_intersection.c_str(), blue_red_intersection);
+
+    // Classify microglial cells
+    std::vector<std::vector<cv::Point>> microglial_contours, other_contours;
+    classifyMicroglialCells(contours_blue, blue_red_intersection, 
+                            &microglial_contours, &other_contours);
+    data_stream << dir_name << "," 
+                << microglial_contours.size() + other_contours.size() << "," 
+                << microglial_contours.size() << ",";
+
+    // Blue-green channel intersection
+    cv::Mat blue_green_intersection;
+    bitwise_and(blue_merge, green_merge, blue_green_intersection);
+    std::string out_blue_green_intersection = out_directory + 
+                        "blue_green_layers_merged_enhanced.tif";
+    if (DEBUG_FLAG) cv::imwrite(out_blue_green_intersection.c_str(), blue_green_intersection);
+
+    // Classify neural cells
+    std::vector<std::vector<cv::Point>> neural_contours, remaining_contours;
+    classifyNeuralCells(other_contours, blue_green_intersection, 
+                            &neural_contours, &remaining_contours);
+    data_stream << neural_contours.size() << "," 
+                << remaining_contours.size() << ",";
+
+    data_stream << std::endl;
     data_stream.close();
 
     return true;
@@ -365,6 +452,12 @@ int main(int argc, char *argv[]) {
         std::cerr << "Could not create the data output file." << std::endl;
         return -1;
     }
+
+    data_stream << "image,total cell count,microglial cell count,\
+                neural cell count,other cell count,";
+
+    data_stream << std::endl;
+    data_stream.close();
 
     /* Process each image directory */
     for (auto& file_name : files) {
