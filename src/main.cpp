@@ -11,10 +11,10 @@
 #include "opencv2/imgcodecs.hpp"
 
 
-#define DEBUG_FLAG                0   // Debug flag for image channels
-#define MICROGLIAL_ROI_FACTOR     20  // ROI of microglial cell = roi factor * mean microglial dia
-#define NUM_MICROGLIA_AREA_BINS   21  // Number of bins
-#define MICROGLIA_BIN_AREA        25  // Bin area
+#define DEBUG_FLAG              0   // Debug flag for image channels
+#define MICROGLIAL_ROI_FACTOR   20  // ROI of microglial cell = roi factor * mean microglial dia
+#define NUM_AREA_BINS           21  // Number of bins
+#define BIN_AREA                25  // Bin area
 
 
 /* Channel type */
@@ -213,18 +213,18 @@ void classifyNeuralCells(std::vector<std::vector<cv::Point>> blue_contours,
 }
 
 /* Group microglia area into bins */
-void binMicrogliaArea(std::vector<HierarchyType> contour_mask, 
-                        std::vector<double> contour_area, 
-                        std::string *contour_bins,
-                        unsigned int *contour_cnt) {
+void binArea(std::vector<HierarchyType> contour_mask, 
+                std::vector<double> contour_area, 
+                std::string *contour_bins,
+                unsigned int *contour_cnt) {
 
-    std::vector<unsigned int> count(NUM_MICROGLIA_AREA_BINS, 0);
+    std::vector<unsigned int> count(NUM_AREA_BINS, 0);
     *contour_cnt = 0;
     for (size_t i = 0; i < contour_mask.size(); i++) {
         if (contour_mask[i] != HierarchyType::PARENT_CNTR) continue;
         unsigned int area = static_cast<unsigned int>(round(contour_area[i]));
-        unsigned int bin_index = (area/MICROGLIA_BIN_AREA < NUM_MICROGLIA_AREA_BINS) ? 
-                                        area/MICROGLIA_BIN_AREA : NUM_MICROGLIA_AREA_BINS-1;
+        unsigned int bin_index = 
+            (area/BIN_AREA < NUM_AREA_BINS) ? area/BIN_AREA : NUM_AREA_BINS-1;
         count[bin_index]++;
     }
 
@@ -434,8 +434,25 @@ bool processDir(std::string dir_name, std::string out_file) {
     // Characterize microglial cells
     std::string microglial_bins;
     unsigned int microglial_cnt;
-    binMicrogliaArea(red_contour_mask, red_contour_area, &microglial_bins, &microglial_cnt);
+    binArea(red_contour_mask, red_contour_area, &microglial_bins, &microglial_cnt);
     data_stream << microglial_cnt << "," << microglial_bins;
+
+    // Green-red channel intersection
+    cv::Mat green_red_intersection;
+    bitwise_and(green_merge, red_merge, green_red_intersection);
+    std::string out_green_red_intersection = out_directory + 
+                        "green_red_layers_merged_enhanced.tif";
+    if (DEBUG_FLAG) cv::imwrite(out_green_red_intersection.c_str(), green_red_intersection);
+
+    // Segment the green-red intersection
+    cv::Mat green_red_segmented;
+    std::vector<std::vector<cv::Point>> contours_green_red;
+    std::vector<cv::Vec4i> hierarchy_green_red;
+    std::vector<HierarchyType> green_red_contour_mask;
+    std::vector<double> green_red_contour_area;
+    contourCalc(green_red_intersection, ChannelType::RED, 1.0, &green_red_segmented, 
+                &contours_green_red, &hierarchy_green_red, &green_red_contour_mask, 
+                &green_red_contour_area);
 
 
     data_stream << std::endl;
@@ -536,12 +553,12 @@ int main(int argc, char *argv[]) {
     data_stream << "image,total nuclei count,microglial nuclei count,\
                 neural nuclei count,other nuclei count,microglia fibre count,";
 
-    for (unsigned int i = 0; i < NUM_MICROGLIA_AREA_BINS-1; i++) {
-        data_stream << i*MICROGLIA_BIN_AREA << " <= microglial fibre area < " 
-                    << (i+1)*MICROGLIA_BIN_AREA << ",";
+    for (unsigned int i = 0; i < NUM_AREA_BINS-1; i++) {
+        data_stream << i*BIN_AREA << " <= microglial fibre area < " 
+                    << (i+1)*BIN_AREA << ",";
     }
     data_stream << "microglia fibre area >= " 
-                << (NUM_MICROGLIA_AREA_BINS-1)*MICROGLIA_BIN_AREA << ",";
+                << (NUM_AREA_BINS-1)*BIN_AREA << ",";
 
     data_stream << std::endl;
     data_stream.close();
