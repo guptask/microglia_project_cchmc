@@ -454,6 +454,12 @@ bool processDir(std::string dir_name, std::string out_file) {
                 &contours_green_red, &hierarchy_green_red, &green_red_contour_mask, 
                 &green_red_contour_area);
 
+    // Characterize microglial fibre interaction with neural cells
+    std::string microglial_neural_bins;
+    unsigned int microglial_neural_cnt;
+    binArea(green_red_contour_mask, green_red_contour_area, 
+                &microglial_neural_bins, &microglial_neural_cnt);
+    data_stream << microglial_neural_cnt << "," << microglial_neural_bins;
 
     data_stream << std::endl;
     data_stream.close();
@@ -558,6 +564,15 @@ int main(int argc, char *argv[]) {
                     << (i+1)*BIN_AREA << ",";
     }
     data_stream << "microglia fibre area >= " 
+                << (NUM_AREA_BINS-1)*BIN_AREA << ",";
+
+    data_stream << "microglial fibre - neural cell intersection count,";
+    for (unsigned int i = 0; i < NUM_AREA_BINS-1; i++) {
+        data_stream << i*BIN_AREA 
+                    << " <= microglial fibre - neural cell intersection area < " 
+                    << (i+1)*BIN_AREA << ",";
+    }
+    data_stream << "microglial fibre - neural cell intersection area >= " 
                 << (NUM_AREA_BINS-1)*BIN_AREA << ",";
 
     data_stream << std::endl;
