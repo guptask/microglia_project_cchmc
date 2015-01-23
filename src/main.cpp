@@ -534,7 +534,7 @@ int main(int argc, char *argv[]) {
     }
 
     data_stream << "image,total nuclei count,microglial nuclei count,\
-                neural nuclei count,other nuclei count,microglia count,";
+                neural nuclei count,other nuclei count,microglia fibre count,";
 
     for (unsigned int i = 0; i < NUM_MICROGLIA_AREA_BINS-1; i++) {
         data_stream << i*MICROGLIA_BIN_AREA << " <= microglial fibre area < " 
