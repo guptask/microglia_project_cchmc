@@ -175,7 +175,7 @@ void classifyMicroglialCells(std::vector<std::vector<cv::Point>> blue_contours,
         bitwise_and(drawing, blue_red_intersection, contour_intersection);
         int contour_count_after = countNonZero(contour_intersection);
         float coverage_ratio = ((float)contour_count_after)/contour_count_before;
-        if (coverage_ratio < 0.75) {
+        if (coverage_ratio < 0.50) {
             other_contours->push_back(blue_contours[i]);
         } else {
             microglial_contours->push_back(blue_contours[i]);
@@ -210,51 +210,6 @@ void classifyNeuralCells(std::vector<std::vector<cv::Point>> blue_contours,
             neural_contours->push_back(blue_contours[i]);
         }
     }
-}
-
-/* Microglia-neural separation metrics */
-void microgliaNeuralSepMetrics(std::vector<std::vector<cv::Point>> microglial_contours, 
-                                std::vector<std::vector<cv::Point>> neural_contours,
-                                float *mean_microglial_proximity_cnt,
-                                float *stddev_microglial_proximity_cnt) {
-
-    // Calculate the mid point of all neural cells
-    std::vector<cv::Point2f> mc_neural(neural_contours.size());
-    for (size_t i = 0; i < neural_contours.size(); i++) {
-        cv::Moments mu = moments(neural_contours[i], true);
-        mc_neural[i] = cv::Point2f(static_cast<float>(mu.m10/mu.m00), 
-                                            static_cast<float>(mu.m01/mu.m00));
-    }
-
-    // Calculate the mid point and diameter of all microglial cells
-    std::vector<cv::Point2f> mc_microglial(microglial_contours.size());
-    std::vector<float> microglial_diameter(microglial_contours.size());
-    for (size_t i = 0; i < microglial_contours.size(); i++) {
-        cv::Moments mu = moments(microglial_contours[i], true);
-        mc_microglial[i] = cv::Point2f(static_cast<float>(mu.m10/mu.m00), 
-                                            static_cast<float>(mu.m01/mu.m00));
-        cv::RotatedRect min_area_rect = minAreaRect(cv::Mat(microglial_contours[i]));
-        microglial_diameter[i] = (float) sqrt(pow(min_area_rect.size.width, 2) + 
-                                                pow(min_area_rect.size.height, 2));
-    }
-    cv::Scalar mean_diameter, stddev_diameter;
-    cv::meanStdDev(microglial_diameter, mean_diameter, stddev_diameter);
-
-    // Compute the normal distribution parameters of neural cell count per microglial cell
-    float microglial_roi = (MICROGLIAL_ROI_FACTOR * mean_diameter.val[0])/2;
-    std::vector<float> count(microglial_contours.size(), 0.0);
-    for (size_t i = 0; i < neural_contours.size(); i++) {
-        for (size_t j = 0; j < microglial_contours.size(); j++) {
-            if (cv::norm(mc_neural[i] - mc_microglial[j]) <= microglial_roi) {
-                count[i]++;
-            }
-        }
-    }
-    cv::Scalar mean, stddev;
-    cv::meanStdDev(count, mean, stddev);
-    *mean_microglial_proximity_cnt = static_cast<float>(mean.val[0]);
-    *stddev_microglial_proximity_cnt = static_cast<float>(stddev.val[0]);
-    std::cout << "Hello" << std::endl;
 }
 
 /* Group microglia area into bins */
@@ -477,14 +432,6 @@ bool processDir(std::string dir_name, std::string out_file) {
                 << remaining_contours.size() << ",";
 
     // Characterize microglial cells
-#if 0
-    float mean_microglial_proximity_cnt = 0.0, stddev_microglial_proximity_cnt = 0.0;
-    microgliaNeuralSepMetrics(microglial_contours, neural_contours, 
-                        &mean_microglial_proximity_cnt, &stddev_microglial_proximity_cnt);
-    data_stream << mean_microglial_proximity_cnt << "," 
-                << stddev_microglial_proximity_cnt << ",";
-#endif
-
     std::string microglial_bins;
     unsigned int microglial_cnt;
     binMicrogliaArea(red_contour_mask, red_contour_area, &microglial_bins, &microglial_cnt);
@@ -590,10 +537,10 @@ int main(int argc, char *argv[]) {
                 neural nuclei count,other nuclei count,microglia count,";
 
     for (unsigned int i = 0; i < NUM_MICROGLIA_AREA_BINS-1; i++) {
-        data_stream << i*MICROGLIA_BIN_AREA << " <= microglia area < " 
+        data_stream << i*MICROGLIA_BIN_AREA << " <= microglial fibre area < " 
                     << (i+1)*MICROGLIA_BIN_AREA << ",";
     }
-    data_stream << "microglia area >= " 
+    data_stream << "microglia fibre area >= " 
                 << (NUM_MICROGLIA_AREA_BINS-1)*MICROGLIA_BIN_AREA << ",";
 
     data_stream << std::endl;
