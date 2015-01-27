@@ -15,6 +15,7 @@
 #define MICROGLIAL_ROI_FACTOR   20  // ROI of microglial cell = roi factor * mean microglial dia
 #define NUM_AREA_BINS           21  // Number of bins
 #define BIN_AREA                25  // Bin area
+#define NUM_Z_LAYERS_COMBINED   1   // Number of z-layers combined
 
 
 /* Channel type */
@@ -321,194 +322,195 @@ bool processDir(std::string dir_name, std::string out_file) {
 
     /** Gather BGR channel information needed for feature extraction **/
 
-    // Blue channel
-    cv::Mat blue_merge;
+    cv::Mat blue_merge, green_merge, red_merge;
+    uint8_t merged_layer_count = 0;
+
     for (uint8_t z_index = 0; z_index < z_count; z_index++) {
-        cv::Mat blue_enhanced;
+        cv::Mat blue_enhanced, green_enhanced, red_enhanced;
         if(!enhanceImage(blue[z_index], ChannelType::BLUE, &blue_enhanced)) {
             return false;
         }
-        if (z_index) {
-            bitwise_or(blue_enhanced, blue_merge, blue_merge);
-        } else {
-            blue_merge = blue_enhanced;
-        }
-    }
-    std::string out_blue = out_directory + "blue_layer_merged_enhanced.tif";
-    if (DEBUG_FLAG) cv::imwrite(out_blue.c_str(), blue_merge);
-
-    cv::Mat blue_segmented;
-    std::vector<std::vector<cv::Point>> contours_blue;
-    std::vector<cv::Vec4i> hierarchy_blue;
-    std::vector<HierarchyType> blue_contour_mask;
-    std::vector<double> blue_contour_area;
-    contourCalc(blue_merge, ChannelType::BLUE, 1.0, &blue_segmented, 
-            &contours_blue, &hierarchy_blue, &blue_contour_mask, &blue_contour_area);
-    out_blue.insert(out_blue.find_last_of("."), "_segmented", 10);
-    if (DEBUG_FLAG) cv::imwrite(out_blue.c_str(), blue_segmented);
-
-    // Green channel
-    cv::Mat green_merge;
-    for (uint8_t z_index = 0; z_index < z_count; z_index++) {
-        cv::Mat green_enhanced;
         if(!enhanceImage(green[z_index], ChannelType::GREEN, &green_enhanced)) {
             return false;
         }
-        if (z_index) {
-            bitwise_or(green_enhanced, green_merge, green_merge);
-        } else {
-            green_merge = green_enhanced;
-        }
-    }
-    std::string out_green = out_directory + "green_layer_merged_enhanced.tif";
-    if (DEBUG_FLAG) cv::imwrite(out_green.c_str(), green_merge);
-
-    cv::Mat green_segmented;
-    std::vector<std::vector<cv::Point>> contours_green;
-    std::vector<cv::Vec4i> hierarchy_green;
-    std::vector<HierarchyType> green_contour_mask;
-    std::vector<double> green_contour_area;
-    contourCalc(green_merge, ChannelType::GREEN, 1.0, &green_segmented, 
-            &contours_green, &hierarchy_green, &green_contour_mask, &green_contour_area);
-    out_green.insert(out_green.find_last_of("."), "_segmented", 10);
-    if (DEBUG_FLAG) cv::imwrite(out_green.c_str(), green_segmented);
-
-    // Red channel
-    cv::Mat red_merge;
-    for (uint8_t z_index = 0; z_index < z_count; z_index++) {
-        cv::Mat red_enhanced;
         if(!enhanceImage(red[z_index], ChannelType::RED, &red_enhanced)) {
             return false;
         }
-        if (z_index) {
+        if (z_index%NUM_Z_LAYERS_COMBINED) {
+            bitwise_or(blue_enhanced, blue_merge, blue_merge);
+            bitwise_or(green_enhanced, green_merge, green_merge);
             bitwise_or(red_enhanced, red_merge, red_merge);
         } else {
+            blue_merge = blue_enhanced;
+            green_merge = green_enhanced;
             red_merge = red_enhanced;
         }
+
+        if ((z_index+1)%NUM_Z_LAYERS_COMBINED == 0) {
+
+            merged_layer_count++;
+
+            // Blue channel
+            std::string out_blue = out_directory + 
+                "blue_merged_layer_" + std::to_string(merged_layer_count) + "_enhanced.tif";
+            if (DEBUG_FLAG) cv::imwrite(out_blue.c_str(), blue_merge);
+
+            cv::Mat blue_segmented;
+            std::vector<std::vector<cv::Point>> contours_blue;
+            std::vector<cv::Vec4i> hierarchy_blue;
+            std::vector<HierarchyType> blue_contour_mask;
+            std::vector<double> blue_contour_area;
+            contourCalc(blue_merge, ChannelType::BLUE, 1.0, &blue_segmented, 
+                &contours_blue, &hierarchy_blue, &blue_contour_mask, &blue_contour_area);
+            out_blue.insert(out_blue.find_last_of("."), "_segmented", 10);
+            if (DEBUG_FLAG) cv::imwrite(out_blue.c_str(), blue_segmented);
+
+            // Green channel
+            std::string out_green = out_directory + 
+                "green_merged_layer_" + std::to_string(merged_layer_count) + "_enhanced.tif";
+            if (DEBUG_FLAG) cv::imwrite(out_green.c_str(), green_merge);
+
+            cv::Mat green_segmented;
+            std::vector<std::vector<cv::Point>> contours_green;
+            std::vector<cv::Vec4i> hierarchy_green;
+            std::vector<HierarchyType> green_contour_mask;
+            std::vector<double> green_contour_area;
+            contourCalc(green_merge, ChannelType::GREEN, 1.0, &green_segmented, 
+                &contours_green, &hierarchy_green, &green_contour_mask, &green_contour_area);
+            out_green.insert(out_green.find_last_of("."), "_segmented", 10);
+            if (DEBUG_FLAG) cv::imwrite(out_green.c_str(), green_segmented);
+
+            // Red channel
+            std::string out_red = out_directory + 
+                "red_merged_layer_" + std::to_string(merged_layer_count) + "_enhanced.tif";
+            if (DEBUG_FLAG) cv::imwrite(out_red.c_str(), red_merge);
+
+            cv::Mat red_segmented;
+            std::vector<std::vector<cv::Point>> contours_red;
+            std::vector<cv::Vec4i> hierarchy_red;
+            std::vector<HierarchyType> red_contour_mask;
+            std::vector<double> red_contour_area;
+            contourCalc(red_merge, ChannelType::RED, 1.0, &red_segmented, 
+                &contours_red, &hierarchy_red, &red_contour_mask, &red_contour_area);
+            out_red.insert(out_red.find_last_of("."), "_segmented", 10);
+            if (DEBUG_FLAG) cv::imwrite(out_red.c_str(), red_segmented);
+
+
+            /** Extract multi-dimensional features for analysis **/
+
+            // Blue-red channel intersection
+            cv::Mat blue_red_intersection;
+            bitwise_and(blue_merge, red_merge, blue_red_intersection);
+            std::string out_blue_red_intersection = out_directory + 
+                "blue_red_merged_layer_" + std::to_string(merged_layer_count) + "_enhanced.tif";
+            if (DEBUG_FLAG) cv::imwrite(out_blue_red_intersection.c_str(), 
+                                                        blue_red_intersection);
+
+            // Classify microglial cells
+            std::vector<std::vector<cv::Point>> microglial_contours, other_contours;
+            classifyMicroglialCells(contours_blue, blue_red_intersection, 
+                                        &microglial_contours, &other_contours);
+            data_stream << dir_name << "," << std::to_string(merged_layer_count) << "," 
+                        << microglial_contours.size() + other_contours.size() << "," 
+                        << microglial_contours.size() << ",";
+
+            // Blue-green channel intersection
+            cv::Mat blue_green_intersection;
+            bitwise_and(blue_merge, green_merge, blue_green_intersection);
+            std::string out_blue_green_intersection = out_directory + 
+                "blue_green_merged_layer_" + std::to_string(merged_layer_count) + "_enhanced.tif";
+            if (DEBUG_FLAG) cv::imwrite(out_blue_green_intersection.c_str(), 
+                                                        blue_green_intersection);
+
+            // Classify neural cells
+            std::vector<std::vector<cv::Point>> neural_contours, remaining_contours;
+            classifyNeuralCells(other_contours, blue_green_intersection, 
+                                    &neural_contours, &remaining_contours);
+            data_stream << neural_contours.size() << "," 
+                        << remaining_contours.size() << ",";
+
+            // Characterize microglial cells
+            std::string microglial_bins;
+            unsigned int microglial_cnt;
+            binArea(red_contour_mask, red_contour_area, &microglial_bins, &microglial_cnt);
+            data_stream << microglial_cnt << "," << microglial_bins;
+
+            // Green-red channel intersection
+            cv::Mat green_red_intersection;
+            bitwise_and(green_merge, red_merge, green_red_intersection);
+            std::string out_green_red_intersection = out_directory + 
+                "green_red_merged_layer_" + std::to_string(merged_layer_count) + "_enhanced.tif";
+            if (DEBUG_FLAG) cv::imwrite(out_green_red_intersection.c_str(), green_red_intersection);
+
+            // Segment the green-red intersection
+            cv::Mat green_red_segmented;
+            std::vector<std::vector<cv::Point>> contours_green_red;
+            std::vector<cv::Vec4i> hierarchy_green_red;
+            std::vector<HierarchyType> green_red_contour_mask;
+            std::vector<double> green_red_contour_area;
+            contourCalc(green_red_intersection, ChannelType::RED, 1.0, &green_red_segmented, 
+                        &contours_green_red, &hierarchy_green_red, &green_red_contour_mask, 
+                        &green_red_contour_area);
+
+            // Characterize microglial fibre interaction with neural cells
+            std::string microglial_neural_bins;
+            unsigned int microglial_neural_cnt;
+            binArea(green_red_contour_mask, green_red_contour_area, 
+                    &microglial_neural_bins, &microglial_neural_cnt);
+            data_stream << microglial_neural_cnt << "," << microglial_neural_bins;
+
+            data_stream << std::endl;
+
+
+            /** Original image **/
+
+            std::vector<cv::Mat> merge_original;
+            merge_original.push_back(blue_merge);
+            merge_original.push_back(green_merge);
+            merge_original.push_back(red_merge);
+            cv::Mat color_original;
+            cv::merge(merge_original, color_original);
+            std::string out_original = out_directory + 
+                "original_merged_layer_" + std::to_string(merged_layer_count) + 
+                "_enhanced_and_flatened.tif";
+            cv::imwrite(out_original.c_str(), color_original);
+
+
+            /** Analyzed image **/
+
+            cv::Mat drawing_blue  = blue_merge;
+            cv::Mat drawing_green = cv::Mat::zeros(green_merge.size(), CV_8UC1);
+            cv::Mat drawing_red   = cv::Mat::zeros(red_merge.size(), CV_8UC1);
+
+            // Draw microglial cell boundaries
+            for (size_t i = 0; i < microglial_contours.size(); i++) {
+                cv::RotatedRect min_ellipse = fitEllipse(cv::Mat(microglial_contours[i]));
+                ellipse(drawing_blue, min_ellipse, 255, 4, 8);
+                ellipse(drawing_green, min_ellipse, 0, 4, 8);
+                ellipse(drawing_red, min_ellipse, 255, 4, 8);
+            }
+
+            // Draw neural cell boundaries
+            for (size_t i = 0; i < neural_contours.size(); i++) {
+                cv::RotatedRect min_ellipse = fitEllipse(cv::Mat(neural_contours[i]));
+                ellipse(drawing_blue, min_ellipse, 255, 4, 8);
+                ellipse(drawing_green, min_ellipse, 255, 4, 8);
+                ellipse(drawing_red, min_ellipse, 0, 4, 8);
+            }
+
+            // Merge the modified red, blue and green layers
+            std::vector<cv::Mat> merge_analysis;
+            merge_analysis.push_back(drawing_blue);
+            merge_analysis.push_back(drawing_green);
+            merge_analysis.push_back(drawing_red);
+            cv::Mat color_analysis;
+            cv::merge(merge_analysis, color_analysis);
+            std::string out_analysis = out_directory + 
+                "cell_classification_merged_layer_" + std::to_string(merged_layer_count) + ".tif";
+            cv::imwrite(out_analysis.c_str(), color_analysis);
+        }
     }
-    std::string out_red = out_directory + "red_layer_merged_enhanced.tif";
-    if (DEBUG_FLAG) cv::imwrite(out_red.c_str(), red_merge);
-
-    cv::Mat red_segmented;
-    std::vector<std::vector<cv::Point>> contours_red;
-    std::vector<cv::Vec4i> hierarchy_red;
-    std::vector<HierarchyType> red_contour_mask;
-    std::vector<double> red_contour_area;
-    contourCalc(red_merge, ChannelType::RED, 1.0, &red_segmented, 
-            &contours_red, &hierarchy_red, &red_contour_mask, &red_contour_area);
-    out_red.insert(out_red.find_last_of("."), "_segmented", 10);
-    if (DEBUG_FLAG) cv::imwrite(out_red.c_str(), red_segmented);
-
-
-    /** Extract multi-dimensional features for analysis **/
-
-    // Blue-red channel intersection
-    cv::Mat blue_red_intersection;
-    bitwise_and(blue_merge, red_merge, blue_red_intersection);
-    std::string out_blue_red_intersection = out_directory + 
-                        "blue_red_layers_merged_enhanced.tif";
-    if (DEBUG_FLAG) cv::imwrite(out_blue_red_intersection.c_str(), blue_red_intersection);
-
-    // Classify microglial cells
-    std::vector<std::vector<cv::Point>> microglial_contours, other_contours;
-    classifyMicroglialCells(contours_blue, blue_red_intersection, 
-                            &microglial_contours, &other_contours);
-    data_stream << dir_name << "," 
-                << microglial_contours.size() + other_contours.size() << "," 
-                << microglial_contours.size() << ",";
-
-    // Blue-green channel intersection
-    cv::Mat blue_green_intersection;
-    bitwise_and(blue_merge, green_merge, blue_green_intersection);
-    std::string out_blue_green_intersection = out_directory + 
-                        "blue_green_layers_merged_enhanced.tif";
-    if (DEBUG_FLAG) cv::imwrite(out_blue_green_intersection.c_str(), blue_green_intersection);
-
-    // Classify neural cells
-    std::vector<std::vector<cv::Point>> neural_contours, remaining_contours;
-    classifyNeuralCells(other_contours, blue_green_intersection, 
-                            &neural_contours, &remaining_contours);
-    data_stream << neural_contours.size() << "," 
-                << remaining_contours.size() << ",";
-
-    // Characterize microglial cells
-    std::string microglial_bins;
-    unsigned int microglial_cnt;
-    binArea(red_contour_mask, red_contour_area, &microglial_bins, &microglial_cnt);
-    data_stream << microglial_cnt << "," << microglial_bins;
-
-    // Green-red channel intersection
-    cv::Mat green_red_intersection;
-    bitwise_and(green_merge, red_merge, green_red_intersection);
-    std::string out_green_red_intersection = out_directory + 
-                        "green_red_layers_merged_enhanced.tif";
-    if (DEBUG_FLAG) cv::imwrite(out_green_red_intersection.c_str(), green_red_intersection);
-
-    // Segment the green-red intersection
-    cv::Mat green_red_segmented;
-    std::vector<std::vector<cv::Point>> contours_green_red;
-    std::vector<cv::Vec4i> hierarchy_green_red;
-    std::vector<HierarchyType> green_red_contour_mask;
-    std::vector<double> green_red_contour_area;
-    contourCalc(green_red_intersection, ChannelType::RED, 1.0, &green_red_segmented, 
-                &contours_green_red, &hierarchy_green_red, &green_red_contour_mask, 
-                &green_red_contour_area);
-
-    // Characterize microglial fibre interaction with neural cells
-    std::string microglial_neural_bins;
-    unsigned int microglial_neural_cnt;
-    binArea(green_red_contour_mask, green_red_contour_area, 
-                &microglial_neural_bins, &microglial_neural_cnt);
-    data_stream << microglial_neural_cnt << "," << microglial_neural_bins;
-
-    data_stream << std::endl;
     data_stream.close();
-
-
-    /** Original image **/
-
-    std::vector<cv::Mat> merge_original;
-    merge_original.push_back(blue_merge);
-    merge_original.push_back(green_merge);
-    merge_original.push_back(red_merge);
-    cv::Mat color_original;
-    cv::merge(merge_original, color_original);
-    std::string out_original = out_directory + "original_enhanced_and_flatened.tif";
-    cv::imwrite(out_original.c_str(), color_original);
-
-
-    /** Analyzed image **/
-
-    cv::Mat drawing_blue  = blue_merge;
-    cv::Mat drawing_green = cv::Mat::zeros(green_merge.size(), CV_8UC1);
-    cv::Mat drawing_red   = cv::Mat::zeros(red_merge.size(), CV_8UC1);
-
-    // Draw microglial cell boundaries
-    for (size_t i = 0; i < microglial_contours.size(); i++) {
-        cv::RotatedRect min_ellipse = fitEllipse(cv::Mat(microglial_contours[i]));
-        ellipse(drawing_blue, min_ellipse, 255, 4, 8);
-        ellipse(drawing_green, min_ellipse, 0, 4, 8);
-        ellipse(drawing_red, min_ellipse, 255, 4, 8);
-    }
-
-    // Draw neural cell boundaries
-    for (size_t i = 0; i < neural_contours.size(); i++) {
-        cv::RotatedRect min_ellipse = fitEllipse(cv::Mat(neural_contours[i]));
-        ellipse(drawing_blue, min_ellipse, 255, 4, 8);
-        ellipse(drawing_green, min_ellipse, 255, 4, 8);
-        ellipse(drawing_red, min_ellipse, 0, 4, 8);
-    }
-
-    // Merge the modified red, blue and green layers
-    std::vector<cv::Mat> merge_analysis;
-    merge_analysis.push_back(drawing_blue);
-    merge_analysis.push_back(drawing_green);
-    merge_analysis.push_back(drawing_red);
-    cv::Mat color_analysis;
-    cv::merge(merge_analysis, color_analysis);
-    std::string out_analysis = out_directory + "cell_classification.tif";
-    cv::imwrite(out_analysis.c_str(), color_analysis);
-
     return true;
 }
 
@@ -556,7 +558,7 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    data_stream << "image,total nuclei count,microglial nuclei count,\
+    data_stream << "image,layer,total nuclei count,microglial nuclei count,\
                 neural nuclei count,other nuclei count,microglia fibre count,";
 
     for (unsigned int i = 0; i < NUM_AREA_BINS-1; i++) {
