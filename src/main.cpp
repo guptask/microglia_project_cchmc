@@ -317,6 +317,11 @@ bool processDir(std::string dir_name, std::string out_file) {
         blue[z_index-1]  = channel[0];
         green[z_index-1] = channel[1];
         red[z_index-1]   = channel[2];
+
+        // Original image
+        std::string out_original = out_directory + 
+            "layer_" + std::to_string(z_index) + "_a_original.tif";
+        cv::imwrite(out_original.c_str(), img);
     }
 
 
@@ -327,6 +332,7 @@ bool processDir(std::string dir_name, std::string out_file) {
 
     for (uint8_t z_index = 0; z_index < z_count; z_index++) {
         cv::Mat blue_enhanced, green_enhanced, red_enhanced;
+
         if(!enhanceImage(blue[z_index], ChannelType::BLUE, &blue_enhanced)) {
             return false;
         }
@@ -346,7 +352,7 @@ bool processDir(std::string dir_name, std::string out_file) {
             red_merge = red_enhanced;
         }
 
-        if ((z_index+1)%NUM_Z_LAYERS_COMBINED == 0) {
+        if (((z_index+1)%NUM_Z_LAYERS_COMBINED == 0) || (z_index+1 == z_count)) {
 
             merged_layer_count++;
 
@@ -462,18 +468,17 @@ bool processDir(std::string dir_name, std::string out_file) {
             data_stream << std::endl;
 
 
-            /** Original image **/
+            /** Enhanced image **/
 
-            std::vector<cv::Mat> merge_original;
-            merge_original.push_back(blue_merge);
-            merge_original.push_back(green_merge);
-            merge_original.push_back(red_merge);
-            cv::Mat color_original;
-            cv::merge(merge_original, color_original);
-            std::string out_original = out_directory + 
-                "original_merged_layer_" + std::to_string(merged_layer_count) + 
-                "_enhanced_and_flatened.tif";
-            cv::imwrite(out_original.c_str(), color_original);
+            std::vector<cv::Mat> merge_enhanced;
+            merge_enhanced.push_back(blue_merge);
+            merge_enhanced.push_back(green_merge);
+            merge_enhanced.push_back(red_merge);
+            cv::Mat color_enhanced;
+            cv::merge(merge_enhanced, color_enhanced);
+            std::string out_enhanced = out_directory + 
+                "layer_" + std::to_string(merged_layer_count) + "_b_enhanced.tif";
+            cv::imwrite(out_enhanced.c_str(), color_enhanced);
 
 
             /** Analyzed image **/
@@ -499,15 +504,15 @@ bool processDir(std::string dir_name, std::string out_file) {
             }
 
             // Merge the modified red, blue and green layers
-            std::vector<cv::Mat> merge_analysis;
-            merge_analysis.push_back(drawing_blue);
-            merge_analysis.push_back(drawing_green);
-            merge_analysis.push_back(drawing_red);
-            cv::Mat color_analysis;
-            cv::merge(merge_analysis, color_analysis);
-            std::string out_analysis = out_directory + 
-                "cell_classification_merged_layer_" + std::to_string(merged_layer_count) + ".tif";
-            cv::imwrite(out_analysis.c_str(), color_analysis);
+            std::vector<cv::Mat> merge_analyzed;
+            merge_analyzed.push_back(drawing_blue);
+            merge_analyzed.push_back(drawing_green);
+            merge_analyzed.push_back(drawing_red);
+            cv::Mat color_analyzed;
+            cv::merge(merge_analyzed, color_analyzed);
+            std::string out_analyzed = out_directory + 
+                "layer_" + std::to_string(merged_layer_count) + "_c_analyzed.tif";
+            cv::imwrite(out_analyzed.c_str(), color_analyzed);
         }
     }
     data_stream.close();
