@@ -43,10 +43,10 @@ bool enhanceImage(cv::Mat src, ChannelType channel_type, cv::Mat *dst) {
 
             // Create the mask
             cv::Mat src_gray;
-            cv::threshold(src, src_gray, 50, 255, cv::THRESH_TOZERO);
+            cv::threshold(src, src_gray, 40, 255, cv::THRESH_TOZERO);
             bitwise_not(src_gray, src_gray);
             cv::GaussianBlur(src_gray, enhanced, cv::Size(3,3), 0, 0);
-            cv::threshold(enhanced, enhanced, 240, 255, cv::THRESH_BINARY);
+            cv::threshold(enhanced, enhanced, 150, 255, cv::THRESH_BINARY);
 
             // Invert the mask
             bitwise_not(enhanced, enhanced);
@@ -57,7 +57,7 @@ bool enhanceImage(cv::Mat src, ChannelType channel_type, cv::Mat *dst) {
 
             // Create the mask
             cv::Mat src_gray;
-            cv::threshold(src, src_gray, 50, 255, cv::THRESH_TOZERO);
+            cv::threshold(src, src_gray, 10, 255, cv::THRESH_TOZERO);
             bitwise_not(src_gray, src_gray);
             cv::GaussianBlur(src_gray, enhanced, cv::Size(3,3), 0, 0);
             cv::threshold(enhanced, enhanced, 240, 255, cv::THRESH_BINARY);
@@ -74,7 +74,7 @@ bool enhanceImage(cv::Mat src, ChannelType channel_type, cv::Mat *dst) {
             cv::threshold(src, src_gray, 5, 255, cv::THRESH_TOZERO);
             bitwise_not(src_gray, src_gray);
             cv::GaussianBlur(src_gray, enhanced, cv::Size(3,3), 0, 0);
-            cv::threshold(enhanced, enhanced, 240, 255, cv::THRESH_BINARY);
+            cv::threshold(enhanced, enhanced, 250, 255, cv::THRESH_BINARY);
 
             // Invert the mask
             bitwise_not(enhanced, enhanced);
@@ -176,7 +176,7 @@ void classifyMicroglialCells(std::vector<std::vector<cv::Point>> blue_contours,
         bitwise_and(drawing, blue_red_intersection, contour_intersection);
         int contour_count_after = countNonZero(contour_intersection);
         float coverage_ratio = ((float)contour_count_after)/contour_count_before;
-        if (coverage_ratio < 0.50) {
+        if (coverage_ratio < 0.30) {
             other_contours->push_back(blue_contours[i]);
         } else {
             microglial_contours->push_back(blue_contours[i]);
