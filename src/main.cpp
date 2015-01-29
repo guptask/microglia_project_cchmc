@@ -416,7 +416,7 @@ bool processDir(std::string dir_name, std::string out_file) {
             std::vector<std::vector<cv::Point>> microglial_contours, other_contours;
             classifyMicroglialCells(contours_blue, blue_red_intersection, 
                                         &microglial_contours, &other_contours);
-            data_stream << dir_name << "," << std::to_string(merged_layer_count) << "," 
+            data_stream << token + "_" + std::to_string(merged_layer_count) << "," 
                         << microglial_contours.size() + other_contours.size() << "," 
                         << microglial_contours.size() << ",";
 
@@ -563,7 +563,7 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    data_stream << "image,layer,total nuclei count,microglial nuclei count,\
+    data_stream << "image_layer,total nuclei count,microglial nuclei count,\
                 neural nuclei count,other nuclei count,microglia fibre count,";
 
     for (unsigned int i = 0; i < NUM_AREA_BINS-1; i++) {
