@@ -205,7 +205,7 @@ void classifyNeuralCells(std::vector<std::vector<cv::Point>> blue_contours,
         bitwise_and(drawing, blue_green_intersection, contour_intersection);
         int contour_count_after = countNonZero(contour_intersection);
         float coverage_ratio = ((float)contour_count_after)/contour_count_before;
-        if (coverage_ratio < 0.50) {
+        if (coverage_ratio < 0.20) {
             other_contours->push_back(blue_contours[i]);
         } else {
             neural_contours->push_back(blue_contours[i]);
