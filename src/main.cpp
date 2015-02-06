@@ -22,7 +22,9 @@
 enum class ChannelType : unsigned char {
     BLUE = 0,
     GREEN,
-    RED
+    RED,
+    RED_LOW,
+    RED_HIGH
 };
 
 /* Hierarchy type */
@@ -80,6 +82,39 @@ bool enhanceImage(cv::Mat src, ChannelType channel_type, cv::Mat *dst) {
             bitwise_not(enhanced, enhanced);
         } break;
 
+        case ChannelType::RED_LOW: {
+            // Enhance the red (low) channel
+            cv::Mat red_low = src;
+
+            // Create the mask
+            cv::Mat src_gray;
+            cv::threshold(src, src_gray, 5, 255, cv::THRESH_TOZERO);
+            bitwise_not(src_gray, src_gray);
+            cv::GaussianBlur(src_gray, enhanced, cv::Size(3,3), 0, 0);
+            cv::threshold(enhanced, enhanced, 250, 255, cv::THRESH_BINARY);
+
+            // Enhance the low intensity features
+            cv::Mat red_low_gauss;
+            cv::GaussianBlur(red_low, red_low_gauss, cv::Size(3,3), 0, 0);
+            bitwise_and(red_low_gauss, enhanced, enhanced);
+            cv::threshold(enhanced, enhanced, 240, 255, cv::THRESH_TOZERO_INV);
+            cv::threshold(enhanced, enhanced, 5, 255, cv::THRESH_BINARY);
+        } break;
+
+        case ChannelType::RED_HIGH: {
+            // Enhance the red (high) channel
+
+            // Create the mask
+            cv::Mat src_gray;
+            cv::threshold(src, src_gray, 80, 255, cv::THRESH_TOZERO);
+            bitwise_not(src_gray, src_gray);
+            cv::GaussianBlur(src_gray, enhanced, cv::Size(3,3), 0, 0);
+            cv::threshold(enhanced, enhanced, 250, 255, cv::THRESH_BINARY);
+
+            // Invert the mask
+            bitwise_not(enhanced, enhanced);
+        } break;
+
         default: {
             std::cerr << "Invalid channel type" << std::endl;
             return false;
@@ -100,13 +135,15 @@ void contourCalc(cv::Mat src, ChannelType channel_type,
     cv::Mat temp_src;
     src.copyTo(temp_src);
     switch(channel_type) {
-        case ChannelType::BLUE:
-        case ChannelType::GREEN: {
+        case ChannelType::BLUE :
+        case ChannelType::GREEN : {
             findContours(temp_src, *contours, *hierarchy, cv::RETR_EXTERNAL, 
                                                         cv::CHAIN_APPROX_SIMPLE);
         } break;
 
-        case ChannelType::RED : {
+        case ChannelType::RED :
+        case ChannelType::RED_LOW :
+        case ChannelType::RED_HIGH : {
             findContours(temp_src, *contours, *hierarchy, cv::RETR_CCOMP, 
                                                         cv::CHAIN_APPROX_SIMPLE);
         } break;
@@ -327,11 +364,12 @@ bool processDir(std::string dir_name, std::string out_file) {
 
     /** Gather BGR channel information needed for feature extraction **/
 
-    cv::Mat blue_merge, green_merge, red_merge;
+    cv::Mat blue_merge, green_merge, red_merge, red_low_merge, red_high_merge;
     uint8_t merged_layer_count = 0;
 
     for (uint8_t z_index = 0; z_index < z_count; z_index++) {
-        cv::Mat blue_enhanced, green_enhanced, red_enhanced;
+        cv::Mat blue_enhanced, green_enhanced, red_enhanced, 
+                            red_low_enhanced, red_high_enhanced;
 
         if(!enhanceImage(blue[z_index], ChannelType::BLUE, &blue_enhanced)) {
             return false;
@@ -342,14 +380,24 @@ bool processDir(std::string dir_name, std::string out_file) {
         if(!enhanceImage(red[z_index], ChannelType::RED, &red_enhanced)) {
             return false;
         }
+        if(!enhanceImage(red[z_index], ChannelType::RED_LOW, &red_low_enhanced)) {
+            return false;
+        }
+        if(!enhanceImage(red[z_index], ChannelType::RED_HIGH, &red_high_enhanced)) {
+            return false;
+        }
         if (z_index%NUM_Z_LAYERS_COMBINED) {
             bitwise_or(blue_enhanced, blue_merge, blue_merge);
             bitwise_or(green_enhanced, green_merge, green_merge);
             bitwise_or(red_enhanced, red_merge, red_merge);
+            bitwise_or(red_low_enhanced, red_low_merge, red_low_merge);
+            bitwise_or(red_high_enhanced, red_high_merge, red_high_merge);
         } else {
             blue_merge = blue_enhanced;
             green_merge = green_enhanced;
             red_merge = red_enhanced;
+            red_low_merge = red_low_enhanced;
+            red_high_merge = red_high_enhanced;
         }
 
         if (((z_index+1)%NUM_Z_LAYERS_COMBINED == 0) || (z_index+1 == z_count)) {
@@ -400,6 +448,36 @@ bool processDir(std::string dir_name, std::string out_file) {
                 &contours_red, &hierarchy_red, &red_contour_mask, &red_contour_area);
             out_red.insert(out_red.find_last_of("."), "_segmented", 10);
             if (DEBUG_FLAG) cv::imwrite(out_red.c_str(), red_segmented);
+
+            // Red (low) channel
+            std::string out_red_low = out_directory + 
+                "red_low_merged_layer_" + std::to_string(merged_layer_count) + "_enhanced.tif";
+            if (DEBUG_FLAG) cv::imwrite(out_red_low.c_str(), red_low_merge);
+
+            cv::Mat red_low_segmented;
+            std::vector<std::vector<cv::Point>> contours_red_low;
+            std::vector<cv::Vec4i> hierarchy_red_low;
+            std::vector<HierarchyType> red_low_contour_mask;
+            std::vector<double> red_low_contour_area;
+            contourCalc(red_low_merge, ChannelType::RED_LOW, 1.0, &red_low_segmented, 
+                &contours_red_low, &hierarchy_red_low, &red_low_contour_mask, &red_low_contour_area);
+            out_red.insert(out_red_low.find_last_of("."), "_segmented", 10);
+            if (DEBUG_FLAG) cv::imwrite(out_red_low.c_str(), red_low_segmented);
+
+            // Red (high) channel
+            std::string out_red_high = out_directory + 
+                "red_high_merged_layer_" + std::to_string(merged_layer_count) + "_enhanced.tif";
+            if (DEBUG_FLAG) cv::imwrite(out_red_high.c_str(), red_high_merge);
+
+            cv::Mat red_high_segmented;
+            std::vector<std::vector<cv::Point>> contours_red_high;
+            std::vector<cv::Vec4i> hierarchy_red_high;
+            std::vector<HierarchyType> red_high_contour_mask;
+            std::vector<double> red_high_contour_area;
+            contourCalc(red_high_merge, ChannelType::RED_HIGH, 1.0, &red_high_segmented, 
+                &contours_red_high, &hierarchy_red_high, &red_high_contour_mask, &red_high_contour_area);
+            out_red.insert(out_red_high.find_last_of("."), "_segmented", 10);
+            if (DEBUG_FLAG) cv::imwrite(out_red_high.c_str(), red_high_segmented);
 
 
             /** Extract multi-dimensional features for analysis **/
