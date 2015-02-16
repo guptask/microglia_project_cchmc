@@ -1,4 +1,4 @@
-#Microglia Segmentation Project
+#Confocal images analysis for study of microglial cells
 
 ##Packages to install
 
@@ -10,13 +10,13 @@ To test sample opencv code, compile using
 **g++ <file\_name> `pkg-config opencv --cflags --libs`**
 
 
-##Build and run microglia segmentation package
+##Build and run microglia analysis package
 
 + Inside the project root directory, type **make** to build the project.
-A binary called **segment** will be created.
+A binary called **analyze** will be created.
 
 + Command to run the software: 
-**./segment <image directory path with / at end>**
+**./analyze <image directory path with / at end>**
 
 + Image directory path should have a **tiff** directory which contains the 
 tiff image directories for each czi image.
@@ -26,4 +26,10 @@ tracks the different czi images that are being processed and allows selective
 processing of one or more images.
 
 ##Result
+
++ Inside the image directory path, a directory called **result** gets created. 
+This contains the raw, enhanced and analyzed images for each image.
+
++ The **computed_metrics.csv** contains the metrics results generated during 
+the analysis.
 

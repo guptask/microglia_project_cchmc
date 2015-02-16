@@ -6,7 +6,7 @@ SOURCES= $(wildcard $(SRC)/*.cpp)
 INCLUDIR= $(wildcard $(SRC)/*.hpp)
 OBJECTS= $(join $(addsuffix ../, $(dir $(SOURCES))), $(notdir $(SOURCES:.cpp=.o)))
 
-EXECUTABLE = segment
+EXECUTABLE = analyze
 
 all: $(SOURCES) $(EXECUTABLE)
 
