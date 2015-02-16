@@ -16,6 +16,13 @@ Inside the project root directory, type **make** to build the project.
 A binary called **segment** will be created.
 
 Command to run the software: 
-**./segment <image directory with / at end> <image list> <error file> 
-<output csv file>**
+**./segment <image directory path with / at end>**
+
+Image directory path should have a *tiff* directory which contains the 
+tiff image directories of each czi image.
+
+*image_list.dat* has to be created inside the image directory path. This 
+tracks the different czi images that are being processed.
+
+##Result
 

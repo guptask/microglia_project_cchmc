@@ -272,34 +272,26 @@ void binArea(std::vector<HierarchyType> contour_mask,
 }
 
 /* Process the images inside each directory */
-bool processDir(std::string dir_name, std::string out_file) {
+bool processImage(std::string path, std::string image_name, std::string metrics_file) {
 
     /* Create the data output file for images that were processed */
     std::ofstream data_stream;
-    data_stream.open(out_file, std::ios::app);
+    data_stream.open(metrics_file, std::ios::app);
     if (!data_stream.is_open()) {
         std::cerr << "Could not open the data output file." << std::endl;
-        return false;
-    }
-
-    // Create a alternative directory name for the data collection
-    // Replace '/' and ' ' with '_'
-    std::string dir_name_modified = dir_name;
-    std::size_t found = dir_name_modified.find("/");
-    while (found != std::string::npos) {
-        dir_name_modified.replace(found, 1, "_");
-        found = dir_name_modified.find("/");
-    }
-
-    DIR *read_dir = opendir(dir_name.c_str());
-    if (!read_dir) {
-        std::cerr << "Could not open directory '" << dir_name << "'" << std::endl;
         return false;
     }
 
     // Count the number of images
     uint8_t z_count = 0;
     struct dirent *dir = NULL;
+
+    std::string dir_name = path + "tiff/" + image_name + "/";
+    DIR *read_dir = opendir(dir_name.c_str());
+    if (!read_dir) {
+        std::cerr << "Could not open directory '" << dir_name << "'" << std::endl;
+        return false;
+    }
     while ((dir = readdir(read_dir))) {
         if (!strcmp (dir->d_name, ".") || !strcmp (dir->d_name, "..")) {
             continue;
@@ -308,15 +300,14 @@ bool processDir(std::string dir_name, std::string out_file) {
     }
     closedir(read_dir);
 
-    // Extract the input directory name
-    std::istringstream iss(dir_name);
-    std::string token;
-    getline(iss, token, '/');
-    getline(iss, token, '/');
-
     // Create the output directory
-    std::string out_directory = "result/" + token + "/";
+    std::string out_directory = path + "result/";
     struct stat st = {0};
+    if (stat(out_directory.c_str(), &st) == -1) {
+        mkdir(out_directory.c_str(), 0700);
+    }
+    out_directory = out_directory + image_name + "/";
+    st = {0};
     if (stat(out_directory.c_str(), &st) == -1) {
         mkdir(out_directory.c_str(), 0700);
     }
@@ -327,12 +318,12 @@ bool processDir(std::string dir_name, std::string out_file) {
         // Create the input filename and rgb stream output filenames
         std::string in_filename;
         if (z_count < 10) {
-            in_filename  = dir_name + token + "_z" + std::to_string(z_index) + "c1+2+3.tif";
+            in_filename  = dir_name + image_name + "_z" + std::to_string(z_index) + "c1+2+3.tif";
         } else {
             if (z_index < 10) {
-                in_filename  = dir_name + token + "_z0" + std::to_string(z_index) + "c1+2+3.tif";
+                in_filename  = dir_name + image_name + "_z0" + std::to_string(z_index) + "c1+2+3.tif";
             } else if (z_index < 100) {
-                in_filename  = dir_name + token + "_z" + std::to_string(z_index) + "c1+2+3.tif";
+                in_filename  = dir_name + image_name + "_z" + std::to_string(z_index) + "c1+2+3.tif";
             } else { // assuming number of z plane layers will never exceed 99
                 std::cerr << "Does not support more than 99 z layers curently" << std::endl;
                 return false;
@@ -493,7 +484,7 @@ bool processDir(std::string dir_name, std::string out_file) {
             std::vector<std::vector<cv::Point>> microglial_contours, other_contours;
             classifyMicroglialCells(contours_blue, blue_red_intersection, 
                                         &microglial_contours, &other_contours);
-            data_stream << token + "_" + std::to_string(merged_layer_count) << "," 
+            data_stream << image_name + "_" + std::to_string(merged_layer_count) << "," 
                         << microglial_contours.size() + other_contours.size() << "," 
                         << microglial_contours.size() << ",";
 
@@ -600,7 +591,7 @@ bool processDir(std::string dir_name, std::string out_file) {
 int main(int argc, char *argv[]) {
 
     /* Check for argument count */
-    if (argc != 5) {
+    if (argc != 2) {
         std::cerr << "Invalid number of arguments." << std::endl;
         return -1;
     }
@@ -609,34 +600,36 @@ int main(int argc, char *argv[]) {
     std::string path(argv[1]);
 
     /* Read the list of directories to process */
-    std::vector<std::string> files;
-    FILE *file = fopen(argv[2], "r");
+    std::string image_list_filename = path + "image_list.dat";
+    std::vector<std::string> input_images;
+    FILE *file = fopen(image_list_filename.c_str(), "r");
     if (!file) {
-        std::cerr << "Could not open the file list." << std::endl;
+        std::cerr << "Could not open 'image_list.dat' inside '" << path << "'." << std::endl;
         return -1;
     }
     char line[128];
     while (fgets(line, sizeof(line), file) != NULL) {
-        line[strlen(line)-1] = '/';
+        line[strlen(line)-1] = 0;
         std::string temp_str(line);
-        std::string image_name = path + temp_str;
-        files.push_back(image_name);
+        input_images.push_back(temp_str);
     }
     fclose(file);
 
     /* Create the error log for images that could not be processed */
-    std::ofstream err_file(argv[3]);
+    std::string err_filename = path + "err_list.dat";
+    std::ofstream err_file(err_filename);
     if (!err_file.is_open()) {
         std::cerr << "Could not open the error log file." << std::endl;
         return -1;
     }
 
     /* Create and prepare the file for metrics */
-    std::string out_file(argv[4]);
+    std::string metrics_filename = path + "computed_metrics.csv";
+    std::string metrics_file(metrics_filename);
     std::ofstream data_stream;
-    data_stream.open(out_file, std::ios::out);
+    data_stream.open(metrics_file, std::ios::out);
     if (!data_stream.is_open()) {
-        std::cerr << "Could not create the data output file." << std::endl;
+        std::cerr << "Could not create the metrics file." << std::endl;
         return -1;
     }
 
@@ -663,10 +656,10 @@ int main(int argc, char *argv[]) {
     data_stream.close();
 
     /* Process each image directory */
-    for (auto& file_name : files) {
-        std::cout << "Processing " << file_name << std::endl;
-        if (!processDir(file_name, out_file)) {
-            err_file << file_name << std::endl;
+    for (unsigned int index = 0; index < input_images.size(); index++) {
+        std::cout << "Processing " << input_images[index] << std::endl;
+        if (!processImage(path, input_images[index], metrics_file)) {
+            err_file << input_images[index] << std::endl;
         }
     }
     err_file.close();
