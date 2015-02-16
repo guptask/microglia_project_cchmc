@@ -12,17 +12,18 @@ To test sample opencv code, compile using
 
 ##Build and run microglia segmentation package
 
-+Inside the project root directory, type **make** to build the project.
++ Inside the project root directory, type **make** to build the project.
 A binary called **segment** will be created.
 
-+Command to run the software: 
++ Command to run the software: 
 **./segment <image directory path with / at end>**
 
-+Image directory path should have a **tiff** directory which contains the 
++ Image directory path should have a **tiff** directory which contains the 
 tiff image directories for each czi image.
 
-+**image_list.dat** has to be created inside the image directory path. This 
-tracks the different czi images that are being processed.
++ **image_list.dat** has to be created inside the image directory path. This 
+tracks the different czi images that are being processed and allows selective 
+processing of one or more images.
 
 ##Result
 
