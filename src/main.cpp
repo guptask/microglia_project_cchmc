@@ -533,6 +533,19 @@ bool processImage(std::string path, std::string image_name, std::string metrics_
                     &microglial_neural_bins, &microglial_neural_cnt);
             data_stream << microglial_neural_cnt << "," << microglial_neural_bins;
 
+            // Characterize high intensity microglial fibres
+            std::string red_high_bins;
+            unsigned int red_high_cnt;
+            binArea(red_high_contour_mask, red_high_contour_area, &red_high_bins, &red_high_cnt);
+            data_stream << red_high_cnt << "," << red_high_bins;
+
+            // Characterize low intensity microglial fibres
+            std::string red_low_bins;
+            unsigned int red_low_cnt;
+            binArea(red_low_contour_mask, red_low_contour_area, &red_low_bins, &red_low_cnt);
+            data_stream << red_low_cnt << "," << red_low_bins;
+
+
             data_stream << std::endl;
 
 
@@ -634,13 +647,13 @@ int main(int argc, char *argv[]) {
     }
 
     data_stream << "image_layer,total nuclei count,microglial nuclei count,\
-                neural nuclei count,other nuclei count,microglia fibre count,";
+                neural nuclei count,other nuclei count,microglial fibre count,";
 
     for (unsigned int i = 0; i < NUM_AREA_BINS-1; i++) {
         data_stream << i*BIN_AREA << " <= microglial fibre area < " 
                     << (i+1)*BIN_AREA << ",";
     }
-    data_stream << "microglia fibre area >= " 
+    data_stream << "microglial fibre area >= " 
                 << (NUM_AREA_BINS-1)*BIN_AREA << ",";
 
     data_stream << "microglial fibre - neural cell intersection count,";
@@ -650,6 +663,24 @@ int main(int argc, char *argv[]) {
                     << (i+1)*BIN_AREA << ",";
     }
     data_stream << "microglial fibre - neural cell intersection area >= " 
+                << (NUM_AREA_BINS-1)*BIN_AREA << ",";
+
+    data_stream << "high intensity microglial fibre count,";
+    for (unsigned int i = 0; i < NUM_AREA_BINS-1; i++) {
+        data_stream << i*BIN_AREA 
+                    << " <= high intensity microglial fibre area < " 
+                    << (i+1)*BIN_AREA << ",";
+    }
+    data_stream << "high intensity microglial fibre area >= " 
+                << (NUM_AREA_BINS-1)*BIN_AREA << ",";
+
+    data_stream << "low intensity microglial fibre count,";
+    for (unsigned int i = 0; i < NUM_AREA_BINS-1; i++) {
+        data_stream << i*BIN_AREA 
+                    << " <= low intensity microglial fibre area < " 
+                    << (i+1)*BIN_AREA << ",";
+    }
+    data_stream << "low intensity microglial fibre area >= " 
                 << (NUM_AREA_BINS-1)*BIN_AREA << ",";
 
     data_stream << std::endl;
