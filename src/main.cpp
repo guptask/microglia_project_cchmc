@@ -629,16 +629,15 @@ int main(int argc, char *argv[]) {
     fclose(file);
 
     /* Create the error log for images that could not be processed */
-    std::string err_filename = path + "err_list.dat";
-    std::ofstream err_file(err_filename);
-    if (!err_file.is_open()) {
+    std::string err_file = path + "err_list.dat";
+    std::ofstream err_stream(err_file);
+    if (!err_stream.is_open()) {
         std::cerr << "Could not open the error log file." << std::endl;
         return -1;
     }
 
     /* Create and prepare the file for metrics */
-    std::string metrics_filename = path + "computed_metrics.csv";
-    std::string metrics_file(metrics_filename);
+    std::string metrics_file = path + "computed_metrics.csv";
     std::ofstream data_stream;
     data_stream.open(metrics_file, std::ios::out);
     if (!data_stream.is_open()) {
@@ -690,10 +689,10 @@ int main(int argc, char *argv[]) {
     for (unsigned int index = 0; index < input_images.size(); index++) {
         std::cout << "Processing " << input_images[index] << std::endl;
         if (!processImage(path, input_images[index], metrics_file)) {
-            err_file << input_images[index] << std::endl;
+            err_stream << input_images[index] << std::endl;
         }
     }
-    err_file.close();
+    err_stream.close();
 
     return 0;
 }
