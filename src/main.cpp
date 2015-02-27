@@ -331,7 +331,7 @@ bool processImage(std::string path, std::string image_name, std::string metrics_
         }
 
         // Extract the bgr streams for each input image
-        cv::Mat img = cv::imread(in_filename.c_str());
+        cv::Mat img = cv::imread(in_filename.c_str(), cv::IMREAD_COLOR | cv::IMREAD_ANYDEPTH);
         if (img.empty()) {
             std::cerr << "Invalid input filename" << std::endl;
             return false;
